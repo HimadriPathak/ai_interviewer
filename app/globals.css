@@ -217,7 +217,7 @@
     }
 
     .card-interviewer {
-      @apply flex-center flex-col gap-2 p-7 h-[400px] blue-gradient-dark rounded-lg border-2 border-primary-200/50 flex-1 sm:basis-1/2 w-full;
+      @apply flex-center flex-col gap-2 p-7 h-[500px] blue-gradient-dark rounded-lg border-2 border-primary-200/50 flex-1 sm:basis-1/2 w-full;
     }
 
     .avatar {
@@ -229,11 +229,34 @@
     }
 
     .card-border {
-      @apply border-gradient p-0.5 rounded-2xl flex-1 sm:basis-1/2 w-full h-[400px] max-md:hidden;
+      @apply border-gradient p-0.5 rounded-2xl absolute bottom-4 right-4;
     }
 
     .card-content {
       @apply flex flex-col gap-2 justify-center items-center p-7 dark-gradient rounded-2xl min-h-full;
+    }
+    .chat-view {
+      @apply w-[500px] h-[500px] border border-gray-400 rounded-md flex text-gray-400 text-sm;
+
+      .chat-header {
+        @apply p-4 overflow-auto no-scrollbar;
+
+        .user {
+          @apply flex justify-end;
+        }
+        .chat-message {
+          .message {
+            @apply p-1 px-2 inline-block rounded-md shadow-sm mt-2;
+          }
+
+          .assistant {
+            @apply blue-gradient-dark mr-[40px] ml-[-8px];
+          }
+          .user {
+            @apply dark-gradient mr-[-8px] ml-[40px];
+          }
+        }
+      }
     }
   }
 
@@ -292,6 +315,14 @@
       @apply text-sm font-semibold capitalize;
     }
   }
+}
+
+@utility no-scrollbar {
+  @apply [scrollbar-width:thin] [scrollbar-color:#a0aec0_transparent]
+           [&::-webkit-scrollbar]:w-[6px]
+           [&::-webkit-scrollbar-track]:bg-transparent
+           [&::-webkit-scrollbar-thumb]:bg-[#a0aec0]
+           [&::-webkit-scrollbar-thumb]:rounded;
 }
 
 @utility dark-gradient {

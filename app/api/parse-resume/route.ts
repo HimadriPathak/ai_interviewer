@@ -4,17 +4,19 @@ import { generateObject } from "ai";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 const ResumeSchema = z.object({
-  userName: z.string().describe("The name of the person on the resume"),
+  userName: z
+    .string()
+    .describe("The capitalized name of the person on the resume"),
   summary: z
     .string()
     .describe(
-      "A concise summary of the candidate's professional experience and skills, ideally 2-3 sentences long."
+      "A concise summary of the candidate's professional experience and skills, ideally 3-4 sentences long."
     ),
-  questions: z
-    .array(z.string())
-    .describe(
-      "A list of 3-5 questions to ask the candidate during the interview based on the resume and job description."
-    ),
+  // questions: z
+  //   .array(z.string())
+  //   .describe(
+  //     "A list of 3-5 questions to ask the candidate during the interview based on the resume and job description."
+  //   ),
 });
 
 export async function POST(req: NextRequest) {
@@ -51,16 +53,16 @@ export async function POST(req: NextRequest) {
         ],
       });
       const interview = {
-        userId: object.userName,
+        userName: object.userName,
         jobDescription: jobDescription,
         resumeSummary: object.summary,
-        questions: object.questions,
+        // questions: object.questions,
         createdAt: new Date().toISOString(),
       };
       console.log("Parsed interview data:", interview);
-      await db.collection("interviews").add(interview);
+      const docRef = await db.collection("interviews").add(interview);
 
-      return Response.json({ success: true }, { status: 200 });
+      return Response.json({ success: true, id: docRef.id }, { status: 200 });
     }
   } catch (error) {
     console.error("Error:", error);

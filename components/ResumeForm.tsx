@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner"; // ✅ import from sonner
@@ -22,6 +23,7 @@ const resumeSchema = z.object({
 type ResumeFormData = z.infer<typeof resumeSchema>;
 
 export default function ResumeForm() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<ResumeFormData>({
@@ -50,7 +52,10 @@ export default function ResumeForm() {
 
       const result = await res.json();
       console.log("Parsed Data:", result);
-      toast.success("Resume parsed successfully!");
+      toast.success("Resume parsed successfully. Redirecting to interview...!");
+      if (result.success) {
+        router.push(`/interview/${result?.id}`);
+      }
     } catch (error) {
       console.error("Upload error:", error);
       toast.error("Something went wrong. Please try again.");
