@@ -2,25 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
+import { uploadResume } from "@/lib/actions/resume.action";
+import { ResumeFormData, resumeSchema } from "@/lib/schema/resume.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner"; // ✅ import from sonner
-import { z } from "zod";
 import DropzoneField from "./DropzoneField";
 import FormField from "./FormField";
-
-const resumeSchema = z.object({
-  jobDescription: z
-    .string()
-    .min(10, "Job description must be at least 10 characters"),
-  resume: z.custom<File>((val) => val instanceof File, {
-    message: "Please upload a valid file",
-  }),
-});
-
-type ResumeFormData = z.infer<typeof resumeSchema>;
 
 export default function ResumeForm() {
   const router = useRouter();
@@ -34,38 +23,8 @@ export default function ResumeForm() {
     },
   });
 
-  const handleUpload = async (data: ResumeFormData) => {
-    setIsLoading(true);
-    const formData = new FormData();
-    formData.append("resume", data.resume);
-    formData.append("jobDescription", data.jobDescription);
-
-    try {
-      const res = await fetch("/api/parse-resume", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to parse resume");
-      }
-
-      const result = await res.json();
-      console.log("Parsed Data:", result);
-      toast.success("Resume parsed successfully. Redirecting to interview...!");
-      if (result.success) {
-        router.push(`/interview/${result?.id}`);
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error("Something went wrong. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const onSubmit = (data: ResumeFormData) => {
-    handleUpload(data);
+    uploadResume(data, router, setIsLoading);
   };
 
   return (
@@ -95,7 +54,11 @@ export default function ResumeForm() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button
+              type="submit"
+              className="w-full bg-success-100"
+              disabled={isLoading}
+            >
               {isLoading ? "Processing..." : "Submit"}
             </Button>
           </fieldset>

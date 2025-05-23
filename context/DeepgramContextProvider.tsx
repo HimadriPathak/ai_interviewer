@@ -8,14 +8,18 @@ import {
   type LiveSchema,
   type LiveTranscriptionEvent,
 } from "@deepgram/sdk";
+import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { useRouter } from "next/navigation";
 
 import {
   createContext,
   FunctionComponent,
   ReactNode,
   useContext,
+  useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 interface DeepgramContextType {
   connection: LiveClient | null;
@@ -26,6 +30,7 @@ interface DeepgramContextType {
     text: string,
     setIsSpeaking: (isSpeaking: boolean) => void
   ) => Promise<void>;
+  pauseAudio: () => void;
 }
 
 const DeepgramContext = createContext<DeepgramContextType | undefined>(
@@ -36,29 +41,34 @@ interface DeepgramContextProviderProps {
   children: ReactNode;
 }
 
-const getApiKey = async (): Promise<string> => {
-  const response = await fetch("/api/deepgram", { cache: "no-store" });
-  const result = await response.json();
-  return result.key;
+const getApiKey = async (router: AppRouterInstance): Promise<string> => {
+  try {
+    const response = await fetch("/api/deepgram", { cache: "no-store" });
+    if (!response.ok) throw new Error("Failed to fetch API key");
+
+    const result = await response.json();
+    if (!result.key) throw new Error("API key not found");
+
+    return result.key;
+  } catch (error) {
+    toast.error("Missing or invalid API key. Redirecting to home.");
+    setTimeout(() => router.push("/"), 2000);
+    return "";
+  }
 };
 
 const DeepgramContextProvider: FunctionComponent<
   DeepgramContextProviderProps
 > = ({ children }) => {
+  const router = useRouter();
   const [connection, setConnection] = useState<LiveClient | null>(null);
   const [connectionState, setConnectionState] = useState<LiveConnectionState>(
     LiveConnectionState.CLOSED
   );
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  /**
-   * Connects to the Deepgram speech recognition service and sets up a live transcription session.
-   *
-   * @param options - The configuration options for the live transcription session.
-   * @param endpoint - The optional endpoint URL for the Deepgram service.
-   * @returns A Promise that resolves when the connection is established.
-   */
   const connectToDeepgram = async (options: LiveSchema, endpoint?: string) => {
-    const key = await getApiKey();
+    const key = await getApiKey(router);
     const deepgram = createClient(key);
 
     const conn = deepgram.listen.live(options, endpoint);
@@ -78,31 +88,45 @@ const DeepgramContextProvider: FunctionComponent<
     text: string,
     setIsSpeaking: (isSpeaking: boolean) => void
   ) => {
-    const res = await fetch("/api/deepgram/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
+    try {
+      const res = await fetch("/api/deepgram/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
 
-    if (!res.ok) {
-      throw new Error("Failed to fetch TTS audio");
-    }
+      if (!res.ok) {
+        toast.error("Failed to fetch TTS audio. Redirecting to home.");
+        setTimeout(() => router.push("/"), 2000);
+        throw new Error("Failed to fetch TTS audio");
+      }
 
-    const audioData = await res.arrayBuffer();
-    const blob = new Blob([audioData], { type: "audio/wav" });
-    const url = URL.createObjectURL(blob);
-    setIsSpeaking(true);
-    const audio = new Audio(url);
+      const audioData = await res.arrayBuffer();
+      const blob = new Blob([audioData], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
 
-    audio.onended = () => {
+      setIsSpeaking(true);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        setIsSpeaking(false);
+        audioRef.current = null;
+      };
+      audio.onerror = () => {
+        toast.error("Audio playback failed. Redirecting to home.");
+        setTimeout(() => router.push("/"), 2000);
+        setIsSpeaking(false);
+        audioRef.current = null;
+      };
+
+      audio.play();
+    } catch (error) {
+      console.error(error);
+      toast.error("Error occurred during speech playback. Redirecting.");
+      setTimeout(() => router.push("/"), 2000);
       setIsSpeaking(false);
-    };
-
-    audio.onerror = () => {
-      setIsSpeaking(false); // fallback in case of an error
-    };
-
-    audio.play();
+    }
   };
 
   const disconnectFromDeepgram = async () => {
@@ -111,7 +135,11 @@ const DeepgramContextProvider: FunctionComponent<
       setConnection(null);
     }
   };
-
+  const pauseAudio = () => {
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+    }
+  };
   return (
     <DeepgramContext.Provider
       value={{
@@ -120,6 +148,7 @@ const DeepgramContextProvider: FunctionComponent<
         disconnectFromDeepgram,
         connectionState,
         speakText,
+        pauseAudio,
       }}
     >
       {children}

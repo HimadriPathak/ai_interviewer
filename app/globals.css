@@ -24,7 +24,11 @@
 
   --font-mona-sans: "Mona Sans", sans-serif;
 
-  --bg-pattern: url("/pattern.png");
+  --bg-pattern: radial-gradient(
+    circle,
+    rgba(66, 7, 28, 1) 0%,
+    rgba(29, 33, 71, 1) 100%
+  );
 }
 
 :root {
@@ -324,6 +328,15 @@
            [&::-webkit-scrollbar-thumb]:bg-[#a0aec0]
            [&::-webkit-scrollbar-thumb]:rounded;
 }
+@layer utilities {
+  .no-scrollbar {
+    @apply [scrollbar-width:thin] [scrollbar-color:#a0aec0_transparent]
+      [&::-webkit-scrollbar]:w-[6px]
+      [&::-webkit-scrollbar-track]:bg-transparent
+      [&::-webkit-scrollbar-thumb]:bg-[#a0aec0]
+      [&::-webkit-scrollbar-thumb]:rounded;
+  }
+}
 
 @utility dark-gradient {
   @apply bg-gradient-to-b from-[#1A1C20] to-[#08090D];
@@ -333,8 +346,19 @@
   @apply bg-gradient-to-b from-[#4B4D4F] to-[#4B4D4F33];
 }
 
-@utility pattern {
-  @apply bg-[url('/pattern.png')] bg-top bg-no-repeat;
+@layer utilities {
+  .pattern {
+    @apply w-full bg-no-repeat bg-top bg-cover;
+
+    /* Multiple background layers: image on top, gradient underneath */
+    background-image: url("/pattern.png"),
+      linear-gradient(
+        to bottom,
+        var(--tw-gradient-from, #171532),
+        var(--tw-gradient-via-stops, #171532),
+        var(--tw-gradient-to, #08090d)
+      );
+  }
 }
 
 @utility blue-gradient-dark {

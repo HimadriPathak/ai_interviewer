@@ -20,9 +20,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${monaSans.className} antialiased pattern`}>
-        {children}
+    <html lang="en" className="dark ">
+      <body className={`${monaSans.className} antialiased relative`}>
+        <div className="pattern">{children}</div>
         <Toaster position="top-right" />
       </body>
     </html>

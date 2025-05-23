@@ -1,23 +1,22 @@
 import { db } from "@/firebase/admin";
+import { ParseResumeSchema } from "@/lib/schema/resume.schema";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { NextRequest, NextResponse } from "next/server";
-import z from "zod";
-const ResumeSchema = z.object({
-  userName: z
-    .string()
-    .describe("The capitalized name of the person on the resume"),
-  summary: z
-    .string()
-    .describe(
-      "A concise summary of the candidate's professional experience and skills, ideally 3-4 sentences long."
-    ),
-  // questions: z
-  //   .array(z.string())
-  //   .describe(
-  //     "A list of 3-5 questions to ask the candidate during the interview based on the resume and job description."
-  //   ),
-});
+
+const system = `You are an AI assistant tasked with analyzing two inputs:
+
+1. A text input labeled as "Text Input".
+2. A file input labeled as "File Input".
+
+Your tasks are:
+- Determine if the "Text Input" is a job description. Set \`isJobDescription\` to true only if the text clearly outlines job responsibilities, qualifications, or requirements.
+- Determine if the "File Input" is a resume. Set \`isResume\` to true only if the file contains a candidate's personal information, skills, and professional history.
+- If \`isResume\` is true:
+  - Extract the capitalized \`userName\` from the resume.
+  - Provide a 3-4 sentence \`summary\` of the candidate's professional experience and skills.
+
+Avoid making assumptions. If unsure, return false for the respective boolean fields.`;
 
 export async function POST(req: NextRequest) {
   const genAI = createGoogleGenerativeAI({
@@ -28,41 +27,50 @@ export async function POST(req: NextRequest) {
     const jobDescription = formData.get("jobDescription") as string;
     const file = formData.get("resume") as File | null;
     if (file) {
+      const mimeType = file.type;
+      console.log(mimeType);
       const buffer = await file.arrayBuffer();
       console.log("File buffer:", buffer);
       const uint8Array = new Uint8Array(buffer);
       const { object } = await generateObject({
         model: genAI("gemini-1.5-flash"),
-        schema: ResumeSchema,
+        schema: ParseResumeSchema,
+        system,
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Here is a job description: ${jobDescription}. Please analyze the following resume in the context of this job description.`,
+                text: `Text Input:\n\n${jobDescription}`,
               },
               {
                 type: "file",
-                mimeType: "application/pdf", // Use the correct MIME type
+                mimeType,
                 data: uint8Array,
-                filename: file.name || "example.pdf", // Use originalFilename
+                filename: file.name,
               },
             ],
           },
         ],
       });
-      const interview = {
-        userName: object.userName,
-        jobDescription: jobDescription,
-        resumeSummary: object.summary,
-        // questions: object.questions,
-        createdAt: new Date().toISOString(),
-      };
-      console.log("Parsed interview data:", interview);
-      const docRef = await db.collection("interviews").add(interview);
-
-      return Response.json({ success: true, id: docRef.id }, { status: 200 });
+      if (object.isResume && object.isJobDescription) {
+        const interview = {
+          userName: object.userName,
+          jobDescription: jobDescription,
+          resumeSummary: object.summary,
+          createdAt: new Date().toISOString(),
+        };
+        const docRef = await db.collection("interviews").add(interview);
+        return Response.json(
+          { success: true, data: { ...object, id: docRef.id } },
+          { status: 200 }
+        );
+      }
+      return Response.json(
+        { success: true, data: { ...object, id: "" } },
+        { status: 200 }
+      );
     }
   } catch (error) {
     console.error("Error:", error);

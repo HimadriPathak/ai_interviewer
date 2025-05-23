@@ -74,11 +74,17 @@ const Feedback = async ({ params }: RouteParams) => {
 
       <div className="flex flex-col gap-3">
         <h3>Strengths</h3>
-        <ul>
-          {feedback?.strengths?.map((strength, index) => (
-            <li key={index}>{strength}</li>
-          ))}
-        </ul>
+        {feedback?.strengths?.length === 0 ? (
+          <p className="font-bold">
+            No strengths were identified in this interview.
+          </p>
+        ) : (
+          <ul>
+            {feedback?.strengths?.map((strength, index) => (
+              <li key={index}>{strength}</li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="flex flex-col gap-3">
@@ -94,18 +100,7 @@ const Feedback = async ({ params }: RouteParams) => {
         <Button className="btn-secondary flex-1">
           <Link href="/" className="flex w-full justify-center">
             <p className="text-sm font-semibold text-primary-200 text-center">
-              Back to dashboard
-            </p>
-          </Link>
-        </Button>
-
-        <Button className="btn-primary flex-1">
-          <Link
-            href={`/interview/${id}`}
-            className="flex w-full justify-center"
-          >
-            <p className="text-sm font-semibold text-black text-center">
-              Retake Interview
+              Back to Home
             </p>
           </Link>
         </Button>

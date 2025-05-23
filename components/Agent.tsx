@@ -6,17 +6,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useDeepgram } from "@/context/DeepgramContextProvider";
 import {
-  MicrophoneEvents,
   MicrophoneState,
   useMicrophone,
 } from "@/context/MicrophoneContextProvider";
-import { cn, getInitials } from "@/lib/utils";
+import { setupTranscriptHandler } from "@/lib/actions/deepgram.action";
 import {
-  LiveConnectionState,
-  LiveTranscriptionEvent,
-  LiveTranscriptionEvents,
-} from "@deepgram/sdk";
-import { toast } from "sonner";
+  generateFeedbackUtil,
+  initiateInterviewUtil,
+} from "@/lib/actions/interview.actions";
+import { cn, getInitials } from "@/lib/utils";
+import { LiveConnectionState } from "@deepgram/sdk";
 import ChatBox from "./ChatBox";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
@@ -42,7 +41,7 @@ const Agent = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [endInterview, setEndInterview] = useState(false);
   const userInitials = useMemo(() => getInitials(userName), [userName]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const {
     connection,
     connectToDeepgram,
@@ -65,9 +64,11 @@ const Agent = ({
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
   useEffect(() => {
     if (microphoneState === MicrophoneState.Ready) {
       connectToDeepgram({
@@ -84,114 +85,45 @@ const Agent = ({
   }, [microphoneState]);
 
   const initiateInterview = async () => {
-    setIsLoading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("messages", JSON.stringify(messagesRef.current));
-      formData.append("resumeSummary", resumeSummary!);
-      formData.append("jobDescription", jobDescription!);
-      formData.append("userName", userName!);
-      const res = await fetch("/api/interview", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to fetch interview question");
-      }
-      const result = await res.json();
-      if (result.success) {
-        const aiQuestion = result.object;
-
-        await speakText(aiQuestion.content, setIsSpeaking);
-        if (aiQuestion.endInterview) {
-          setEndInterview(true);
-        }
-
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          { role: aiQuestion.role, content: aiQuestion.content },
-        ]);
-      }
-    } catch (error) {
-      console.error("fetching:", error);
-      toast.error("Something went wrong. Please try again.");
-      setCallStatus(CallStatus.FINISHED);
-    } finally {
-      setIsLoading(false);
-    }
+    initiateInterviewUtil({
+      messagesRef,
+      resumeSummary,
+      jobDescription,
+      userName,
+      setMessages,
+      setIsSpeaking,
+      setEndInterview,
+      setIsLoading,
+      setCallStatus,
+      speakText,
+    });
   };
   useEffect(() => {
     if (endInterview && !isSpeaking && !isLoading) {
       disconnectFromServer();
     }
   }, [isSpeaking, endInterview, isLoading]);
+
   useEffect(() => {
-    if (!microphone) return;
-    if (!connection) return;
+    if (!microphone || !connection) return;
 
     if (connectionState === LiveConnectionState.OPEN && messages.length === 0) {
       initiateInterview();
     }
-    const onData = (e: BlobEvent) => {
-      // iOS SAFARI FIX:
-      // Prevent packetZero from being sent. If sent at size 0, the connection will close.
-      if (e.data.size > 0) {
-        connection?.send(e.data);
-      }
-    };
 
-    const onTranscript = (data: LiveTranscriptionEvent) => {
-      const { is_final: isFinal, speech_final: speechFinal } = data;
-      let thisCaption = data.channel.alternatives[0].transcript.trim();
+    const cleanup = setupTranscriptHandler({
+      connection,
+      startMicrophone,
+      microphone,
+      setMessages,
+      messagesRef,
+      isSpeaking,
+      endInterview,
+      captionTimeout,
+      initiateInterview,
+    });
 
-      if (isSpeaking || !thisCaption || !(isFinal && speechFinal)) return;
-
-      setMessages((prevMessages) => {
-        const updatedMessages = [...prevMessages];
-        const lastMessage = updatedMessages[updatedMessages.length - 1];
-
-        if (lastMessage?.role === "user") {
-          if (!lastMessage.content.includes(thisCaption)) {
-            lastMessage.content += " " + thisCaption;
-          }
-        } else {
-          updatedMessages.push({ role: "user", content: thisCaption });
-        }
-
-        messagesRef.current = updatedMessages;
-        return updatedMessages;
-      });
-
-      if (captionTimeout.current) clearTimeout(captionTimeout.current);
-
-      captionTimeout.current = setTimeout(() => {
-        const latestMessages = messagesRef.current;
-
-        if (
-          latestMessages.length > 0 &&
-          latestMessages[latestMessages.length - 1].role === "user"
-        ) {
-          initiateInterview();
-        }
-      }, 10000);
-    };
-
-    if (connectionState === LiveConnectionState.OPEN) {
-      connection.addListener(LiveTranscriptionEvents.Transcript, onTranscript);
-      microphone.addEventListener(MicrophoneEvents.DataAvailable, onData);
-
-      startMicrophone();
-    }
-
-    return () => {
-      // prettier-ignore
-      connection.removeListener(LiveTranscriptionEvents.Transcript, onTranscript);
-      microphone.removeEventListener(MicrophoneEvents.DataAvailable, onData);
-      clearTimeout(captionTimeout.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return cleanup;
   }, [connectionState]);
 
   useEffect(() => {
@@ -216,30 +148,19 @@ const Agent = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [microphoneState, connectionState]);
 
-  const handleGenerateFeedback = async (messages: SavedMessage[]) => {
-    const formData = new FormData();
-    formData.append("messages", JSON.stringify(messagesRef.current));
-    formData.append("userName", userName!);
-    formData.append("interviewId", interviewId!);
-    if (feedbackId) formData.append("feedbackId", feedbackId);
-
-    const res = await fetch("/api/feedback", {
-      method: "POST",
-      body: formData,
+  const handleFeedback = () => {
+    generateFeedbackUtil({
+      messagesRef,
+      userName,
+      interviewId,
+      feedbackId,
+      router,
     });
-
-    const { success, feedbackId: id } = await res.json();
-
-    if (success && id) {
-      router.push(`/interview/${interviewId}/feedback`);
-    } else {
-      console.log("Error saving feedback");
-      router.push("/");
-    }
   };
+
   useEffect(() => {
     if (callStatus === CallStatus.FINISHED) {
-      handleGenerateFeedback(messages);
+      handleFeedback();
     }
   }, [messages, callStatus, feedbackId, interviewId, router, userName]);
   const disconnectFromServer = () => {
@@ -280,12 +201,11 @@ const Agent = ({
       </div>
 
       <div className="w-full flex justify-center">
-        {callStatus !== "ACTIVE" ? (
+        {callStatus !== "ACTIVE" || isLoading ? (
           <Button
             className="btn-call bg-success-100"
             type="submit"
             disabled={isLoading}
-            // onClick={connectToServer}
           >
             <span
               className={cn(
@@ -295,14 +215,14 @@ const Agent = ({
             />
 
             <span className="relative">
-              {callStatus === "INACTIVE" || callStatus === "FINISHED"
-                ? "Call"
-                : ". . ."}
+              {callStatus === "FINISHED"
+                ? "Processing Feedback..."
+                : "Processing. . ."}
             </span>
           </Button>
         ) : (
           <Button
-            variant={"destructive"}
+            variant={isLoading ? "secondary" : "destructive"}
             onClick={() => disconnectFromServer()}
             disabled={isLoading}
           >

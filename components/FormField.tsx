@@ -36,7 +36,7 @@ const FormField = <T extends FieldValues>({
               <Textarea
                 placeholder={placeholder}
                 {...field}
-                className="flex h-[300px]"
+                className="flex h-[300px] no-scrollbar"
               />
             ) : (
               <Input
