@@ -53,7 +53,7 @@
 ```bash
 git clone https://github.com/HimadriPathak/ai_interviewer.git
 cd ai_interviewer
-npm install
+npm install--legacy-peer-deps or npm run install:legacy"
 ```
 
 **3. Configure Environment**

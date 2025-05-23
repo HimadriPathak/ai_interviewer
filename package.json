@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "npm install --legacy-peer-deps && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "install:legacy": "npm install --legacy-peer-deps"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.2.18",
